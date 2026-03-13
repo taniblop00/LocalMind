@@ -1,0 +1,15 @@
+bitsandbytes==0.43.3
+tf-keras
+rich==13.7.1
+langchain-community==0.2.16
+langchain-core==0.2.38
+spacy==3.8.0
+pynvml==11.5.0
+torch==2.3.1
+transformers==4.43.3
+peft==0.12.0
+accelerate==0.33.0
+datasets==3.0.0
+trl==0.9.6
+sentencepiece==0.2.0
+docx2txt

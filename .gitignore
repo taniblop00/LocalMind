@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+outputs/
+data/raw/*
+!data/raw/.gitkeep
+data/processed/
+pip_out.txt
+.env
+.DS_Store
