@@ -244,46 +244,34 @@ Expected output:
 
 ## 🌐 Running on a Remote GPU Server (Vast.ai / RunPod / etc.)
 
-When training on a cloud GPU, you can't just copy files into a folder. Use the included **Upload Server** to transfer your documents through your browser — no SSH, no SCP, nothing complicated.
+### Step 1 — Clone & run setup
 
-### Step 1 — Start the upload server on the remote machine
+```bash
+git clone https://github.com/taniblop00/LocalMind2.git
+cd LocalMind2
+chmod +x setup.sh && ./setup.sh
+```
+
+The setup script auto-detects your CUDA version and installs the exact matching PyTorch + torchvision — no manual version picking needed.
+
+### Step 2 — Upload your files via JupyterLab
+
+Every Vast.ai and RunPod instance comes with **JupyterLab** already open. No ports, no terminal tricks needed:
+
+1. Open JupyterLab from your instance dashboard
+2. In the left panel, navigate to `data/raw/`
+3. Click the **Upload** button (⬆️) or drag & drop your files directly into the folder
+
+That's it. Your files are now on the server.
+
+### Step 3 — Run training
+
+Open a terminal inside JupyterLab and run:
 
 ```bash
 source venv/bin/activate
-python upload_server.py
-```
-
-You'll see:
-```
-====================================================
-  🧠 LocalMind — Upload Server
-====================================================
-  Local:   http://localhost:7860
-  Network: http://123.45.67.89:7860
-====================================================
-```
-
-### Step 2 — Open the URL in your browser
-
-On **Vast.ai**: find the open port `7860` in your instance dashboard, or use the direct IP printed in the terminal.
-
-On **RunPod**: use the **Connect → HTTP Service → Port 7860** button.
-
-### Step 3 — Drag & drop your files
-
-The web interface opens in your browser. Drag `.pdf`, `.txt`, `.csv`, or `.docx` files onto it. Each file uploads with a progress bar and a ✓ confirmation.
-
-> Files are saved automatically to `data/raw/` on the server.
-
-### Step 4 — Stop the server and start training
-
-Press **Ctrl+C** in the terminal to stop the upload server, then:
-
-```bash
 python main.py
 ```
-
-> ⚠️ Make sure port **7860** is open/exposed in your cloud provider's firewall / port mapping settings.
 
 ---
 

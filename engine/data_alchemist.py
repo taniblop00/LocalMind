@@ -62,7 +62,7 @@ class DataAlchemist:
             # Enable native evaluation mode
             FastLanguageModel.for_inference(self.worker_model)
         except Exception as e:
-            self.hw_manager.print_info(f"Failed to load Worker LLM (falling back to heuristics): {e}")
+            print(f"[INFO] Failed to load Worker LLM (falling back to heuristics): {e}")
             self.use_llm_worker = False
             if HAS_SPACY:
                 self.nlp = spacy.load("en_core_web_sm")
