@@ -59,11 +59,11 @@ def main():
     with Live(ui.generate_layout(hw_manager.get_telemetry(), phase_name="Data Synthesis"), refresh_per_second=4, screen=True) as live:
         def synthesis_progress(step, total, msg):
             live.update(ui.generate_layout(
-                hw_manager.get_telemetry(), 
-                step=step, 
-                total_steps=total, 
+                hw_manager.get_telemetry(),
                 phase_name="Data Synthesis",
-                msg=msg
+                msg=msg,
+                synth_step=step,
+                synth_total=total
             ))
             
         valid_pairs = alchemist.process_and_synthesize(progress_callback=synthesis_progress)

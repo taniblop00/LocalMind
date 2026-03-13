@@ -12,7 +12,9 @@ console = Console()
 class CyberpunkUI:
     def __init__(self):
         self.loss_history = deque(maxlen=30)
-        self.thought_stream = deque(maxlen=8)
+        self.thought_stream = deque(maxlen=10)
+        self.synthesis_step = 0
+        self.synthesis_total = 0
         self.console = console
 
     def build_header(self):
@@ -116,14 +118,33 @@ class CyberpunkUI:
 
     def build_live_lab_table(self):
         lines = []
-        for i, thought in enumerate(self.thought_stream):
-            color = "cyan" if i == len(self.thought_stream) - 1 else "grey70"
-            lines.append(f"[{color}]» {thought}[/{color}]")
-            
-        text = "\n".join(lines) if lines else "[grey50]Awaiting data processing instructions...[/grey50]"
+        stream = list(self.thought_stream)
+        for i, thought in enumerate(stream):
+            is_latest = (i == len(stream) - 1)
+            if is_latest:
+                color = "bold cyan"
+                prefix = "▶"
+            else:
+                color = "grey58"
+                prefix = "·"
+            lines.append(f"[{color}]{prefix} {thought}[/{color}]")
+
+        if not lines:
+            body = "[grey50]◌  Initializing synthesis pipeline...[/grey50]"
+        else:
+            body = "\n".join(lines)
+
+        # Progress bar row at the bottom
+        if self.synthesis_total > 0:
+            pct = self.synthesis_step / self.synthesis_total
+            filled = int(pct * 28)
+            bar = "[cyan]" + "█" * filled + "[/cyan]" + "[grey30]" + "░" * (28 - filled) + "[/grey30]"
+            progress_line = f"\n\n  Chunks  {bar}  [{self.synthesis_step}/{self.synthesis_total}]  {pct*100:.0f}%"
+            body += progress_line
+
         return Panel(
-            text, 
-            title="[bold white]🧪 ALCHEMY LOG_STREAM[/]", 
+            body,
+            title="[bold white]🧪 ALCHEMY LOG_STREAM[/]",
             border_style="blue",
             title_align="left"
         )
@@ -151,9 +172,12 @@ class CyberpunkUI:
         text = Text.from_markup("[grey60]System strictly local. Data remains private. Architecture optimized for accessibility.[/grey60]")
         return Align.center(text)
 
-    def generate_layout(self, hw_data, step=0, total_steps=0, current_loss=None, phase_name="Setup", msg=None):
+    def generate_layout(self, hw_data, step=0, total_steps=0, current_loss=None, phase_name="Setup", msg=None, synth_step=0, synth_total=0):
         if msg:
             self.thought_stream.append(msg)
+        if synth_total > 0:
+            self.synthesis_step = synth_step
+            self.synthesis_total = synth_total
             
         layout = Layout()
         layout.split_column(

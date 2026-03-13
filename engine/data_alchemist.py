@@ -182,19 +182,29 @@ class DataAlchemist:
         total = len(chunks)
         if total == 0:
             return 0
-            
+
+        mode_label = "LLM Worker" if self.use_llm_worker else "NLP Heuristic"
+
+        if progress_callback:
+            progress_callback(0, total, f"Loaded {total} text chunks. Mode: {mode_label}")
+
         Path(self.output_file).parent.mkdir(parents=True, exist_ok=True)
         with open(self.output_file, 'w', encoding='utf-8') as f:
             pass
-            
+
         valid_pairs = 0
         with open(self.output_file, 'a', encoding='utf-8') as f:
             for i, chunk in enumerate(chunks):
+                if progress_callback:
+                    preview = chunk.page_content[:60].replace('\n', ' ').strip()
+                    progress_callback(i + 1, total, f"Reading chunk {i+1}/{total} — \"{preview}...\"")
+
                 if self.use_llm_worker:
                     qa_pairs = self._generate_qa_llm(chunk.page_content)
                 else:
                     qa_pairs = self._generate_qa_heuristic(chunk.page_content)
-                    
+
+                chunk_pairs = 0
                 for qa_pair in qa_pairs:
                     if len(qa_pair.get("output", "")) > 10:
                         alpaca_format = {
@@ -204,9 +214,17 @@ class DataAlchemist:
                         }
                         f.write(json.dumps(alpaca_format) + "\n")
                         valid_pairs += 1
-                        
-                        if progress_callback:
-                            msg = f"[{qa_pair.get('persona', 'AI')}] {qa_pair.get('instruction', '')}"
-                            progress_callback(i + 1, total, msg)
-                            
+                        chunk_pairs += 1
+
+                if progress_callback and chunk_pairs > 0:
+                    persona = qa_pairs[-1].get("persona", "AI") if qa_pairs else "AI"
+                    question = qa_pairs[-1].get("instruction", "") if qa_pairs else ""
+                    progress_callback(
+                        i + 1, total,
+                        f"Generated {chunk_pairs} pair(s)  [{persona}] {question[:55]}"
+                    )
+
+        if progress_callback:
+            progress_callback(total, total, f"Done! {valid_pairs} training pairs written to disk.")
+
         return valid_pairs
