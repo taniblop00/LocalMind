@@ -29,6 +29,7 @@ It detects your hardware automatically, picks the right model and settings for y
 | 💻 **Live Cyberpunk TUI** | A beautiful real-time terminal dashboard while training runs |
 | 📦 **One-Click Export** | Exports LoRA weights + a standalone `inference.py` script automatically |
 | 🖥️ **GPU + CPU Support** | Full support for NVIDIA GPUs via Unsloth, or CPU-only fallback |
+| 📤 **Remote Upload Server** | Drag & drop files from your browser to a remote GPU server — no SSH needed |
 
 ---
 
@@ -241,11 +242,57 @@ Expected output:
 
 ---
 
+## 🌐 Running on a Remote GPU Server (Vast.ai / RunPod / etc.)
+
+When training on a cloud GPU, you can't just copy files into a folder. Use the included **Upload Server** to transfer your documents through your browser — no SSH, no SCP, nothing complicated.
+
+### Step 1 — Start the upload server on the remote machine
+
+```bash
+source venv/bin/activate
+python upload_server.py
+```
+
+You'll see:
+```
+====================================================
+  🧠 LocalMind — Upload Server
+====================================================
+  Local:   http://localhost:7860
+  Network: http://123.45.67.89:7860
+====================================================
+```
+
+### Step 2 — Open the URL in your browser
+
+On **Vast.ai**: find the open port `7860` in your instance dashboard, or use the direct IP printed in the terminal.
+
+On **RunPod**: use the **Connect → HTTP Service → Port 7860** button.
+
+### Step 3 — Drag & drop your files
+
+The web interface opens in your browser. Drag `.pdf`, `.txt`, `.csv`, or `.docx` files onto it. Each file uploads with a progress bar and a ✓ confirmation.
+
+> Files are saved automatically to `data/raw/` on the server.
+
+### Step 4 — Stop the server and start training
+
+Press **Ctrl+C** in the terminal to stop the upload server, then:
+
+```bash
+python main.py
+```
+
+> ⚠️ Make sure port **7860** is open/exposed in your cloud provider's firewall / port mapping settings.
+
+---
+
 ## 📂 Project Structure
 
 ```
 LocalMind2/
 ├── main.py                 # Entry point — runs the full pipeline
+├── upload_server.py        # Remote file uploader (browser drag & drop)
 ├── verify_system.py        # Optional system verification script
 ├── requirements.txt        # Python dependencies
 ├── setup.bat               # Windows setup script
