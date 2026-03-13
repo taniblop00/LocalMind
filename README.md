@@ -254,22 +254,27 @@ chmod +x setup.sh && ./setup.sh
 
 The setup script auto-detects your CUDA version and installs the exact matching PyTorch + torchvision — no manual version picking needed.
 
-### Step 2 — Upload your files via JupyterLab
+### Step 2 — Upload your training files
 
-Every Vast.ai and RunPod instance comes with **JupyterLab** already open. No ports, no terminal tricks needed:
-
-1. Open JupyterLab from your instance dashboard
-2. In the left panel, navigate to `data/raw/`
-3. Click the **Upload** button (⬆️) or drag & drop your files directly into the folder
-
-That's it. Your files are now on the server.
-
-### Step 3 — Run training
-
-Open a terminal inside JupyterLab and run:
+Run the built-in upload server:
 
 ```bash
 source venv/bin/activate
+python upload_server.py
+```
+
+Then open the URL printed in the terminal (e.g. `http://123.45.67.89:7860`) in your browser.
+Drag & drop your `.pdf`, `.txt`, `.csv`, or `.docx` files — they upload directly to `data/raw/` with a progress bar.
+
+> **Vast.ai:** In your instance dashboard → **Open Ports** → expose port `7860`, then use the link shown.
+>
+> **RunPod:** Connect → HTTP Service → Port `7860`.
+
+Press **Ctrl+C** when done uploading.
+
+### Step 3 — Run training
+
+```bash
 python main.py
 ```
 
