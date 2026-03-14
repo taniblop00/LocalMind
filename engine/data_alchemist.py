@@ -89,14 +89,24 @@ class DataAlchemist:
         if not documents:
             return []
 
-        # Semantic Chunking (Overlap preserves context)
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
-            length_function=len,
-            is_separator_regex=False,
-        )
-        chunks = text_splitter.split_documents(documents)
+        # Split into small chunks (sentences/lines) instead of large 1000-character blocks
+        # This forces the generator to focus on specific, granular facts (like salaries/roles).
+        if HAS_SPACY and hasattr(self, 'nlp') and self.nlp:
+            chunks = []
+            for doc in documents:
+                spacy_doc = self.nlp(doc.page_content)
+                for sent in spacy_doc.sents:
+                    if len(sent.text.strip()) > 15:
+                        chunks.append(Document(page_content=sent.text.strip(), metadata=doc.metadata))
+        else:
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=150,
+                chunk_overlap=20,
+                length_function=len,
+                is_separator_regex=False,
+            )
+            chunks = text_splitter.split_documents(documents)
+            
         return chunks
 
     def _generate_qa_llm(self, text_chunk: str):
@@ -105,13 +115,18 @@ class DataAlchemist:
             return []
             
         system_prompt = (
-            "You are NexusMind Data Alchemist. Analyze the text and generate a JSON array containing EXACTLY 3 objects "
-            "representing interactions from 3 different personas: 'Expert', 'Curious User', and 'Skeptic'. "
+            "You are a Universal Knowledge Extractor. Your task is to analyze the following single sentence or short text, "
+            "and generate a JSON array containing 2 to 4 question-and-answer pairs based STRICTLY and ONLY on that text. "
+            "CRITICAL INSTRUCTION: You MUST write the questions and answers IN ENGLISH ONLY, regardless of the text language. "
+            "DO NOT HALLUCINATE. DO NOT add external information, prior knowledge, or assumptions. "
+            "Identify the core facts, definitions, processes, metrics, or entities in the text. "
+            "Generate precise questions targeting those specific pieces of information (e.g., 'What is X?', 'How does Y work?', 'What is the value of Z?'). "
+            "If the text does not contain enough information to form a meaningful question, return an empty array []. "
             "Each JSON object MUST have: "
-            "'persona' (the persona name), "
-            "'instruction' (the user query/question), "
-            "'chain_of_thought' (step-by-step reasoning linking text to answer), "
-            "and 'output' (the comprehensive answer). "
+            "'persona' (e.g., 'Student', 'Analyst', 'Curious User'), "
+            "'instruction' (the specific question in English), "
+            "'chain_of_thought' (briefly explain where in the text you found the fact, in English), "
+            "and 'output' (the exact factual answer extracted from the text, in English). "
         )
         prompt = f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n{system_prompt}<|eot_id|><|start_header_id|>user<|end_header_id|>\nText: {text_chunk}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
         
@@ -151,8 +166,8 @@ class DataAlchemist:
         # Default fallback pair (works for any language)
         fallback_pair = {
             "persona": "Fallback",
-            "instruction": "Please summarize the following text.",
-            "chain_of_thought": "I will summarize the context provided.",
+            "instruction": "What key information is provided in the following text?",
+            "chain_of_thought": "I will extract the core fact from the provided context.",
             "input": "",
             "output": stripped,
             "raw_context": text_chunk
@@ -171,13 +186,14 @@ class DataAlchemist:
                 subject = random.choice(subjects)
                 question_types = [
                     "What is the significance of",
-                    "Can you explain details regarding",
-                    "Provide information about"
+                    "Can you provide details regarding",
+                    "What information is given about",
+                    "Who or what is",
                 ]
                 return [{
                     "persona": "Curious User",
-                    "instruction": f"{random.choice(question_types)} {subject}?",
-                    "chain_of_thought": f"The user is asking about '{subject}' based on the text.",
+                    "instruction": f"{random.choice(question_types)} '{subject}' in the text?",
+                    "chain_of_thought": f"The user is asking about the entity '{subject}' mentioned in the text.",
                     "input": "",
                     "output": stripped,
                     "raw_context": text_chunk
