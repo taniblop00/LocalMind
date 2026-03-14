@@ -1,5 +1,4 @@
 bitsandbytes
-tf-keras
 rich==13.7.1
 langchain-community==0.2.16
 langchain-core==0.2.38
