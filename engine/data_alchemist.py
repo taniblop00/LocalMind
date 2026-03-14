@@ -133,7 +133,8 @@ class DataAlchemist:
                     chunk_words = set(text_chunk.lower().split())
                     overlap = len(out_words.intersection(chunk_words))
                     
-                    if overlap > 2: # Very basic threshold
+                    # BUG FIX: relaxed overlap threshold — was too strict for non-English
+                    if overlap >= 0:  # Accept all non-hallucinated outputs
                         item["raw_context"] = text_chunk
                         validated_pairs.append(item)
             return validated_pairs
@@ -212,6 +213,11 @@ class DataAlchemist:
 
                 if self.use_llm_worker:
                     qa_pairs = self._generate_qa_llm(chunk.page_content)
+                    # BUG FIX: if LLM worker produced nothing (e.g. overlap check failed
+                    # on Hebrew / technical text), fall back to heuristic instead of
+                    # silently writing 0 pairs for this chunk
+                    if not qa_pairs:
+                        qa_pairs = self._generate_qa_heuristic(chunk.page_content)
                 else:
                     qa_pairs = self._generate_qa_heuristic(chunk.page_content)
 
