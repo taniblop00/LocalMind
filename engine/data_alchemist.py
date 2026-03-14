@@ -52,14 +52,16 @@ class DataAlchemist:
         try:
             from unsloth import FastLanguageModel
             import torch
-            max_seq_length = 2048 # Keep small for worker
+            max_seq_length = 2048
             self.worker_model, self.worker_tokenizer = FastLanguageModel.from_pretrained(
                 model_name = "unsloth/Llama-3.2-1B-Instruct-bnb-4bit",
                 max_seq_length = max_seq_length,
                 dtype = None,
                 load_in_4bit = True,
             )
-            # Enable native evaluation mode
+            # BUG FIX: pad_token MUST be set for batched generation
+            if self.worker_tokenizer.pad_token is None:
+                self.worker_tokenizer.pad_token = self.worker_tokenizer.eos_token
             FastLanguageModel.for_inference(self.worker_model)
         except Exception as e:
             print(f"[INFO] Failed to load Worker LLM (falling back to heuristics): {e}")
@@ -139,42 +141,51 @@ class DataAlchemist:
             return []
 
     def _generate_qa_heuristic(self, text_chunk: str):
-        """Uses NLP/Keyword extraction to fake QA generation when VRAM is tight."""
+        """Uses NLP/Keyword extraction to generate QA pairs when VRAM is tight.
+        Always returns at least one valid pair — even for non-English text."""
+        stripped = text_chunk.strip()
+        if not stripped:
+            return []
+
+        # Default fallback pair (works for any language)
+        fallback_pair = {
+            "persona": "Fallback",
+            "instruction": "Please summarize the following text.",
+            "chain_of_thought": "I will summarize the context provided.",
+            "input": "",
+            "output": stripped,
+            "raw_context": text_chunk
+        }
+
         if not hasattr(self, 'nlp') or not self.nlp:
-            return [{
-                "persona": "Fallback",
-                "instruction": "Please summarize the following text.",
-                "chain_of_thought": "I will summarize the context.",
-                "input": "",
-                "output": text_chunk.strip(),
-                "raw_context": text_chunk
-            }]
-            
-        doc = self.nlp(text_chunk)
-        subjects = [ent.text for ent in doc.ents] 
-        if not subjects:
-             subjects = [chunk.text for chunk in doc.noun_chunks]
-             
-        if subjects:
-            subject = random.choice(subjects)
-            question_types = ["What is the significance of", "Can you explain details regarding", "Provide information about"]
-            return [{
-                "persona": "Curious User",
-                "instruction": f"{random.choice(question_types)} {subject}?",
-                "chain_of_thought": f"The user is asking about {subject} directly based on the text.",
-                "input": "",
-                "output": text_chunk.strip(),
-                "raw_context": text_chunk
-            }]
-        
-        return [{
-             "persona": "Fallback",
-             "instruction": "Explain the following context.",
-             "chain_of_thought": "No specific NE found, requesting full summary.",
-             "input": "",
-             "output": text_chunk.strip(),
-             "raw_context": text_chunk
-        }]
+            return [fallback_pair]
+
+        try:
+            doc = self.nlp(text_chunk)
+            subjects = [ent.text for ent in doc.ents]
+            if not subjects:
+                subjects = [chunk.text for chunk in doc.noun_chunks]
+
+            if subjects:
+                subject = random.choice(subjects)
+                question_types = [
+                    "What is the significance of",
+                    "Can you explain details regarding",
+                    "Provide information about"
+                ]
+                return [{
+                    "persona": "Curious User",
+                    "instruction": f"{random.choice(question_types)} {subject}?",
+                    "chain_of_thought": f"The user is asking about '{subject}' based on the text.",
+                    "input": "",
+                    "output": stripped,
+                    "raw_context": text_chunk
+                }]
+        except Exception:
+            pass
+
+        # NLP found nothing useful — use the guaranteed fallback
+        return [fallback_pair]
 
     def process_and_synthesize(self, progress_callback=None):
         """Main pipeline loop. Yields progress updates and generated questions for Live Lab."""
@@ -206,7 +217,7 @@ class DataAlchemist:
 
                 chunk_pairs = 0
                 for qa_pair in qa_pairs:
-                    if len(qa_pair.get("output", "")) > 10:
+                    if len(qa_pair.get("output", "").strip()) > 5:
                         alpaca_format = {
                             "instruction": qa_pair.get("instruction", "Answer the question based on the context."),
                             "input": qa_pair.get("raw_context", ""),

@@ -88,22 +88,17 @@ class TrainerCore:
             )
         else:
             # CPU Fallback via Huggingface PEFT
-            # Provide silent setup
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            
-            try:
-                from transformers import BitsAndBytesConfig
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_name, 
-                    device_map="cpu", 
-                    quantization_config=BitsAndBytesConfig(load_in_8bit=True)
-                )
-            except Exception:
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_name, 
-                    device_map="cpu", 
-                    torch_dtype=torch.float32
-                )
+            # BUG FIX: pad_token must be set or SFTTrainer will crash
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+
+            # BitsAndBytes 8-bit is unreliable on CPU-only servers — go straight to float32
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                device_map="cpu",
+                torch_dtype=torch.float32
+            )
             peft_config = LoraConfig(
                 r=self.config["lora_rank"],
                 lora_alpha=16,
@@ -163,24 +158,30 @@ class TrainerCore:
                       # state.global_step, state.max_steps, logs["loss"]
                       callback(state.global_step, state.max_steps, logs["loss"])
 
+        # BUG FIX: is_bfloat16_supported() only available when UNSLOTH_AVAILABLE is True
+        _use_gpu = (self.config["mode"] == "gpu" and UNSLOTH_AVAILABLE)
+        _bf16 = (is_bfloat16_supported() if _use_gpu else False)
+        _fp16 = (not _bf16) if _use_gpu else False
+
         training_args = TrainingArguments(
             per_device_train_batch_size = batch_size,
             gradient_accumulation_steps = grad_acc,
             warmup_steps = 5,
             num_train_epochs = epochs,
             learning_rate = 2e-4,
-            fp16 = not is_bfloat16_supported() if UNSLOTH_AVAILABLE and self.config["mode"] == "gpu" else False,
-            bf16 = is_bfloat16_supported() if UNSLOTH_AVAILABLE and self.config["mode"] == "gpu" else False,
+            fp16 = _fp16,
+            bf16 = _bf16,
             logging_steps = 1,
             optim = "adamw_8bit" if self.config["mode"] == "gpu" else "adamw_torch",
             weight_decay = 0.01,
             lr_scheduler_type = "linear",
             seed = 3407,
             output_dir = "outputs",
-            dataloader_num_workers = self.config.get("dataloader_workers", 1),
-            disable_tqdm=True,              # Hide standard progress bars
-            report_to="none",               # Don't log to W&B / stdout
-            log_level="error",              # Hide info/warnings from trainer
+            # BUG FIX: num_workers > 0 can cause multiprocessing deadlocks on Linux
+            dataloader_num_workers = 0,
+            disable_tqdm=True,
+            report_to="none",
+            log_level="error",
         )
 
         import logging
@@ -194,16 +195,16 @@ class TrainerCore:
             train_dataset = dataset,
             dataset_text_field = "text",
             max_seq_length = self.max_seq_length,
-            dataset_num_proc = 2,
-            packing = False, # Can make training 5x faster for Short sequences.
+            # BUG FIX: dataset_num_proc > 1 causes multiprocessing deadlocks on many Linux servers
+            dataset_num_proc = 1,
+            packing = False,
             args = training_args,
             callbacks=[TuiBridgeCallback()]
         )
-        
-        import contextlib
-        with open(os.devnull, 'w') as fnull:
-            with contextlib.redirect_stdout(fnull), contextlib.redirect_stderr(fnull):
-                self.trainer.train()
+
+        # BUG FIX: Removed redirect_stdout/stderr — it was swallowing the TUI callback
+        # (the loss values were never reaching the Live display)
+        self.trainer.train()
 
     def save_and_export(self):
         """Saves LoRA weights, attempts GGUF export, and generates standalone inference script."""

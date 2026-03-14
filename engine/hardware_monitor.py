@@ -3,7 +3,8 @@ import psutil
 try:
     import pynvml
     import torch
-    HAS_GPU = True
+    # BUG FIX: must also confirm CUDA is actually available, not just that torch is installed
+    HAS_GPU = torch.cuda.is_available()
 except ImportError:
     HAS_GPU = False
 
